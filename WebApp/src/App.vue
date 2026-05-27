@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import FormulasView from './views/FormulasView.vue'
+import CalcView from './views/CalcView.vue'
 import { renderMath } from '@/utils/MathHelper'
 
 const activeTab = ref<'solver' | 'formulas' | 'history'>('solver')
@@ -83,6 +84,7 @@ const calculationHistory = ref<HistoryItem[]>([])
       </nav>
     </div>
   </header>
+  <CalcView v-show="activeTab === 'solver'" />
   <FormulasView v-show="activeTab === 'formulas'" />
 </template>
 

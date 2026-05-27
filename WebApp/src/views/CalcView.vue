@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import Plotly from 'plotly.js-dist'
-import { renderMath, toLatex, calculateNumericalIntegration, safeEval } from '@/utils/MathHelper'
+import { renderMath, toLatex, solveIntegral } from '@/utils/MathHelper'
 
 interface Step {
   title: string
@@ -10,24 +9,22 @@ interface Step {
 }
 
 // --- Props & Models ---
-const expression = defineModel<string>('expression', { required: true })
-const calcMode = defineModel<'analytical' | 'numerical'>('calcMode', { required: true })
-const lowerBound = defineModel<number>('lowerBound', { required: true })
-const upperBound = defineModel<number>('upperBound', { required: true })
-const intervals = defineModel<number>('intervals', { required: true })
-const numericalMethod = defineModel<
+const expression = ref('x^2')
+const calcMode = ref<'analytical' | 'numerical'>('analytical')
+const lowerBound = ref<number>(0)
+const upperBound = ref<number>(2)
+const intervals = ref<number>(10)
+const numericalMethod = ref<
   'riemann_left' | 'riemann_right' | 'riemann_midpoint' | 'trapezoidal' | 'simpson'
->('numericalMethod', { required: true })
-const useMockMode = defineModel<boolean>('useMockMode', { required: true })
+>('trapezoidal')
+const useMockMode = ref(false)
 
-const props = defineProps<{
-  isLoading: boolean
-  errorMessage: string
-  resultReady: boolean
-  finalResultLatex: string
-  finalNumericalValue: number | null
-  resolutionSteps: Step[]
-}>()
+const isLoading = ref(false)
+const errorMessage = ref('')
+const resultReady = ref(false)
+const finalResultLatex = ref('')
+const finalNumericalValue = ref<number | null>(null)
+const resolutionSteps = ref<Step[]>([])
 
 const inputRef = ref<HTMLInputElement | null>(null)
 const chartRef = ref<HTMLDivElement | null>(null)
@@ -76,168 +73,9 @@ const livePreviewLatex = computed(() => {
   }
 })
 
-// --- Plotly Chart Renderer ---
-const drawPlotlyChart = () => {
-  if (!chartRef.value || calcMode.value !== 'numerical') return
-
-  const a = lowerBound.value
-  const b = upperBound.value
-  const expr = expression.value
-
-  // 1. Generate smooth curve points for f(x)
-  const curveX: number[] = []
-  const curveY: number[] = []
-
-  const range = b - a
-  const plotMin = a - Math.max(1, range * 0.2)
-  const plotMax = b + Math.max(1, range * 0.2)
-  const totalPoints = 300
-  const stepSize = (plotMax - plotMin) / totalPoints
-
-  for (let i = 0; i <= totalPoints; i++) {
-    const px = plotMin + i * stepSize
-    const py = safeEval(expr, px)
-    curveX.push(px)
-    curveY.push(py)
-  }
-
-  // 2. Build the traces
-  const traces: any[] = []
-
-  // Main function line
-  traces.push({
-    x: curveX,
-    y: curveY,
-    name: 'f(x)',
-    type: 'scatter',
-    mode: 'lines',
-    line: {
-      color: '#3b82f6', // Bright Blue
-      width: 3,
-    },
-  })
-
-  // Base area under the curve (continuous)
-  const areaX: number[] = []
-  const areaY: number[] = []
-  const areaPoints = 150
-  const areaStep = range / areaPoints
-  for (let i = 0; i <= areaPoints; i++) {
-    const ax = a + i * areaStep
-    areaX.push(ax)
-    areaY.push(safeEval(expr, ax))
-  }
-
-  traces.push({
-    x: [a, ...areaX, b],
-    y: [0, ...areaY, 0],
-    fill: 'toself',
-    fillcolor: 'rgba(59, 130, 246, 0.1)',
-    line: { color: 'transparent' },
-    name: 'Área Teórica',
-    hoverinfo: 'skip',
-  })
-
-  // 3. Subdivision shapes (Riemann / Trapezoids / Simpson segments)
-  const calcRes = calculateNumericalIntegration(expr, a, b, intervals.value, numericalMethod.value)
-  const shapes = calcRes.intervals
-  if (shapes.length > 0) {
-    const shapesX: (number | null)[] = []
-    const shapesY: (number | null)[] = []
-
-    shapes.forEach((shape) => {
-      shapesX.push(...shape.x, null)
-      shapesY.push(...shape.y, null)
-    })
-
-    traces.push({
-      x: shapesX,
-      y: shapesY,
-      fill: 'toself',
-      fillcolor: 'rgba(139, 92, 246, 0.25)', // Semi-transparent Purple
-      line: {
-        color: '#a78bfa', // Purple borders
-        width: 1.5,
-      },
-      name: 'Intervalos (' + numericalMethod.value.replace('_', ' ') + ')',
-      type: 'scatter',
-      mode: 'lines',
-    })
-  }
-
-  // 4. Vertical limits a and b
-  const maxVal = Math.max(0, ...curveY, ...shapes.flatMap((s) => s.y))
-  const minVal = Math.min(0, ...curveY, ...shapes.flatMap((s) => s.y))
-
-  traces.push({
-    x: [a, a],
-    y: [minVal, maxVal],
-    mode: 'lines',
-    line: {
-      color: '#ef4444', // Red
-      width: 1.5,
-      dash: 'dash',
-    },
-    name: `x = a (${a})`,
-    showlegend: false,
-  })
-
-  traces.push({
-    x: [b, b],
-    y: [minVal, maxVal],
-    mode: 'lines',
-    line: {
-      color: '#ef4444',
-      width: 1.5,
-      dash: 'dash',
-    },
-    name: `x = b (${b})`,
-    showlegend: false,
-  })
-
-  // 5. Layout config
-  const layout = {
-    paper_bgcolor: 'rgba(0,0,0,0)',
-    plot_bgcolor: 'rgba(0,0,0,0)',
-    autosize: true,
-    font: {
-      color: '#334155',
-      family: 'Inter, system-ui, sans-serif',
-    },
-    xaxis: {
-      gridcolor: 'rgba(226, 230, 240, 0.8)',
-      zerolinecolor: '#94a3b8',
-      title: 'Eje X',
-      tickmode: 'auto',
-    },
-    yaxis: {
-      gridcolor: 'rgba(226, 230, 240, 0.8)',
-      zerolinecolor: '#94a3b8',
-      title: 'f(x)',
-      tickmode: 'auto',
-    },
-    margin: { t: 20, r: 15, b: 35, l: 45 },
-    hovermode: 'closest',
-    showlegend: true,
-    legend: {
-      orientation: 'h',
-      x: 0,
-      y: -0.25,
-      font: { size: 11 },
-    },
-  }
-
-  const config = {
-    responsive: true,
-    displayModeBar: false,
-  }
-
-  Plotly.newPlot(chartRef.value, traces, layout as any, config)
-}
-
-// Resize handler
+/* Resize handler
 const handleResize = () => {
-  if (calcMode.value === 'numerical' && props.resultReady && chartRef.value) {
+  if (calcMode.value === 'numerical' && resultReady && chartRef.value) {
     Plotly.Plots.resize(chartRef.value)
   }
 }
@@ -245,8 +83,7 @@ const handleResize = () => {
 onMounted(() => {
   window.addEventListener('resize', handleResize)
 
-  // If component mounts and result is already ready, draw the plot
-  if (calcMode.value === 'numerical' && props.resultReady) {
+  if (calcMode.value === 'numerical' && resultReady) {
     nextTick(() => {
       drawPlotlyChart()
     })
@@ -255,7 +92,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
-})
+})*/
 </script>
 
 <template>
@@ -271,43 +108,34 @@ onUnmounted(() => {
         </p>
       </div>
 
-      <!-- Calculator Panels Layout -->
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        <!-- Column 1: Inputs (Calculator Panel) -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start mx-32">
         <div
-          class="lg:col-span-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-2xl shadow-xl shadow-slate-200/50 dark:shadow-black/25 overflow-hidden"
+          class="lg:col-span-5 bg-white border border-slate-200 rounded-2xl shadow-xl shadow-slate-200/50 overflow-hidden"
         >
           <div
-            class="px-6 py-4 bg-linear-to-r border-b border-slate-200 dark:border-slate-700/60 flex items-center justify-between"
+            class="px-6 py-4 bg-linear-to-r border-b border-slate-200 flex items-center justify-between"
           >
-            <span
-              class="font-bold text-slate-700 dark:text-slate-300 text-md tracking-wide uppercase"
-              >Parámetros</span
-            >
+            <span class="font-bold text-slate-700 text-md tracking-wide uppercase">Parámetros</span>
 
-            <!-- Mock Mode Status Indicator -->
             <label class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" v-model="useMockMode" class="sr-only peer" />
               <div
-                class="w-9 h-5 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-350 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"
+                class="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:border-white peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"
               ></div>
-              <span class="ml-2 text-xs font-semibold text-slate-500 dark:text-slate-400"
-                >Simulado</span
-              >
+              <span class="ml-2 text-xs font-semibold text-slate-500">Local</span>
             </label>
           </div>
 
           <div class="p-6 space-y-6">
-            <!-- Mode Selection Slider (Analytical vs Numerical) -->
-            <div class="bg-slate-100 dark:bg-slate-950 p-1.5 rounded-xl flex space-x-1">
+            <div class="bg-slate-100 p-1.5 rounded-xl flex space-x-1">
               <button
                 type="button"
                 @click="calcMode = 'analytical'"
                 :class="[
-                  'w-1/2 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all duration-300',
+                  'w-1/2 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all duration-300 cursor-pointer',
                   calcMode === 'analytical'
-                    ? 'bg-white dark:bg-slate-800 text-violet-600 dark:text-violet-400 shadow-sm'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200',
+                    ? 'bg-white text-primary shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800',
                 ]"
               >
                 Analítica (Fórmula)
@@ -316,27 +144,25 @@ onUnmounted(() => {
                 type="button"
                 @click="calcMode = 'numerical'"
                 :class="[
-                  'w-1/2 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all duration-300',
+                  'w-1/2 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all duration-300 cursor-pointer',
                   calcMode === 'numerical'
-                    ? 'bg-white dark:bg-slate-800 text-violet-600 dark:text-violet-400 shadow-sm'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200',
+                    ? 'bg-white text-primary shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800',
                 ]"
               >
                 Área Bajo la Curva
               </button>
             </div>
 
-            <!-- Main Input Field (Function f(x)) -->
             <div>
               <label
                 for="function-expr"
-                class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2"
+                class="block text-sm font-bold text-slate-500 uppercase tracking-wider mb-2"
               >
                 Función a Integrar f(x)
               </label>
               <div class="relative">
-                <span
-                  class="absolute left-4 top-3.5 font-serif italic text-slate-400 dark:text-slate-500 text-lg"
+                <span class="absolute left-4 top-3.5 font-serif italic text-slate-400 text-lg"
                   >f(x) =</span
                 >
                 <input
@@ -345,25 +171,22 @@ onUnmounted(() => {
                   type="text"
                   v-model="expression"
                   placeholder="x^2 + sin(x)"
-                  class="w-full pl-16 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 font-mono text-base text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition-all"
+                  class="w-full pl-16 pr-4 py-3 rounded-xl border border-slate-200 bg-white font-mono text-base text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all"
                 />
               </div>
             </div>
 
-            <!-- Live KaTeX Preview of Input -->
             <div
-              class="p-4 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-xl overflow-x-auto min-h-[50px] flex items-center justify-center"
+              class="p-4 bg-slate-50 border border-slate-100 rounded-xl overflow-x-auto min-h-[50px] flex items-center justify-center"
             >
               <div
                 v-html="renderMath(livePreviewLatex, true)"
-                class="text-base sm:text-lg text-slate-700 dark:text-slate-300"
+                class="text-base sm:text-lg text-slate-700"
               ></div>
             </div>
 
-            <!-- Mathematical Pad Helper Buttons -->
             <div>
-              <span
-                class="block text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-2"
+              <span class="block text-sm font-bold text-slate-400 uppercase mb-2"
                 >Teclado de Símbolos</span
               >
               <div class="grid grid-cols-5 gap-1.5">
@@ -388,29 +211,21 @@ onUnmounted(() => {
                   :key="sym"
                   type="button"
                   @click="insertSymbol(sym)"
-                  class="py-1.5 text-xs font-mono font-bold rounded-lg border border-slate-200 dark:border-slate-800 hover:border-violet-300 dark:hover:border-violet-900 bg-slate-50 dark:bg-slate-800 hover:bg-violet-50 dark:hover:bg-violet-950/40 text-slate-600 dark:text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 transition-all duration-150 cursor-pointer"
+                  class="py-1.5 text-sm font-mono font-bold rounded-lg border border-slate-200 hover:border-primary bg-slate-50 hover:bg-primary/10 text-slate-600 hover:text-primary transition-all duration-150 cursor-pointer"
                 >
                   {{ sym }}
                 </button>
               </div>
             </div>
 
-            <!-- Numerical Integration Bounds (a, b, n, Method) -->
-            <div
-              v-if="calcMode === 'numerical'"
-              class="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-850"
-            >
-              <span
-                class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider"
+            <div v-if="calcMode === 'numerical'" class="space-y-4 pt-2 border-t border-slate-100">
+              <span class="block text-sm font-bold text-slate-400 uppercase mb-2"
                 >Intervalo y Subdivisiones</span
               >
 
               <div class="grid grid-cols-2 gap-4">
                 <div>
-                  <label
-                    for="bound-a"
-                    class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1"
-                  >
+                  <label for="bound-a" class="block text-[11px] font-semibold text-slate-500 mb-1">
                     Límite Inferior (a)
                   </label>
                   <input
@@ -418,7 +233,7 @@ onUnmounted(() => {
                     type="number"
                     step="any"
                     v-model.number="lowerBound"
-                    class="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm font-semibold focus:outline-none focus:ring-1.5 focus:ring-violet-500 focus:border-violet-500"
+                    class="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm font-semibold focus:outline-none focus:ring-1.5 focus:ring-primary focus:border-primary"
                   />
                 </div>
                 <div>
@@ -430,7 +245,7 @@ onUnmounted(() => {
                     type="number"
                     step="any"
                     v-model.number="upperBound"
-                    class="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm font-semibold focus:outline-none focus:ring-1.5 focus:ring-violet-500 focus:border-violet-500"
+                    class="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm font-semibold focus:outline-none focus:ring-1.5 focus:ring-primary focus:border-primary"
                   />
                 </div>
               </div>
@@ -449,7 +264,7 @@ onUnmounted(() => {
                     min="2"
                     max="1000"
                     v-model.number="intervals"
-                    class="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm font-semibold focus:outline-none focus:ring-1.5 focus:ring-violet-500 focus:border-violet-500"
+                    class="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm font-semibold focus:outline-none focus:ring-1.5 focus:ring-primary focus:border-primary"
                   />
                 </div>
                 <div>
@@ -462,7 +277,7 @@ onUnmounted(() => {
                   <select
                     id="numerical-method"
                     v-model="numericalMethod"
-                    class="w-full px-2.5 py-2 rounded-lg border border-slate-200 bg-white text-sm font-semibold focus:outline-none focus:ring-1.5 focus:ring-violet-500 focus:border-violet-500"
+                    class="w-full px-2.5 py-2 rounded-lg border border-slate-200 bg-white text-sm font-semibold focus:outline-none focus:ring-1.5 focus:ring-primary focus:border-primary"
                   >
                     <option value="riemann_left">Riemann Izq.</option>
                     <option value="riemann_right">Riemann Der.</option>
@@ -474,11 +289,27 @@ onUnmounted(() => {
               </div>
             </div>
 
-            <!-- Solve Button -->
             <button
               type="button"
+              @click="
+                solveIntegral(
+                  expression,
+                  calcMode,
+                  isLoading,
+                  errorMessage,
+                  resultReady,
+                  finalNumericalValue,
+                  finalResultLatex,
+                  resolutionSteps,
+                  lowerBound,
+                  upperBound,
+                  intervals,
+                  numericalMethod,
+                  useMockMode,
+                )
+              "
               :disabled="isLoading"
-              class="w-full py-3.5 px-4 rounded-xl text-white font-extrabold text-sm tracking-wide bg-linear-to-r from-violet-600 to-blue-600 hover:from-violet-700 hover:to-blue-700 disabled:opacity-50 transition-all duration-300 shadow-md hover:shadow-lg shadow-violet-500/20 flex items-center justify-center space-x-2 active:scale-[0.98]"
+              class="w-full py-3.5 px-4 rounded-xl text-white font-extrabold cursor-pointer tracking-wide bg-primary hover:bg-primary/80 disabled:opacity-50 transition-all duration-300 shadow-md hover:shadow-lg shadow-primary/20 flex items-center justify-center space-x-2 active:scale-[0.98]"
             >
               <svg
                 v-if="isLoading"
@@ -503,51 +334,41 @@ onUnmounted(() => {
               <span>{{ isLoading ? 'PROCESANDO...' : 'RESOLVER INTEGRAL' }}</span>
             </button>
 
-            <!-- Connection Status Warnings -->
             <div
               v-if="errorMessage"
               class="p-4 rounded-xl border border-red-200/50 bg-red-50/50 dark:bg-red-950/20 dark:border-red-900/40 text-red-700 dark:text-red-400 text-xs font-semibold leading-relaxed"
             >
               <div class="flex items-start space-x-2">
-                <span class="text-sm">⚠️</span>
                 <span>{{ errorMessage }}</span>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Column 2: Results Drawer -->
         <div id="results-section" class="lg:col-span-7 space-y-6">
-          <!-- Standard Placeholder when nothing is processed yet -->
           <div
             v-if="!resultReady && !isLoading"
-            class="bg-white dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-800 rounded-2xl p-12 text-center flex flex-col items-center justify-center min-h-[300px]"
+            class="bg-white border border-dashed border-slate-300 rounded-2xl p-12 text-center flex flex-col items-center justify-center min-h-[300px]"
           >
-            <div class="text-5xl mb-4">📐</div>
-            <h3 class="font-extrabold text-lg text-slate-800 dark:text-white">
-              Esperando Ecuación
-            </h3>
-            <p class="text-sm text-slate-500 dark:text-slate-400 max-w-sm mt-2 leading-relaxed">
+            <h3 class="font-extrabold text-xl text-slate-800">Esperando Ecuación</h3>
+            <p class="text-sm text-slate-500 max-w-sm mt-2 leading-relaxed">
               Ingresa una función a la izquierda y presiona "Resolver" para calcular los resultados
               y visualizar la aproximación gráfica.
             </p>
           </div>
 
-          <!-- Loader skeleton -->
           <div
             v-if="isLoading"
-            class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-2xl p-8 space-y-6 min-h-[300px] animate-pulse"
+            class="bg-white border border-slate-200 rounded-2xl p-8 space-y-6 min-h-[300px] animate-pulse"
           >
-            <div class="h-6 w-1/3 bg-slate-200 dark:bg-slate-850 rounded-lg"></div>
-            <div class="h-16 w-full bg-slate-100 dark:bg-slate-850 rounded-xl"></div>
-            <div class="h-40 w-full bg-slate-200 dark:bg-slate-850 rounded-2xl"></div>
+            <div class="h-6 w-1/3 bg-slate-200 rounded-lg"></div>
+            <div class="h-16 w-full bg-slate-100 rounded-xl"></div>
+            <div class="h-40 w-full bg-slate-200 rounded-2xl"></div>
           </div>
 
-          <!-- Solution Section (Visible when computation completes) -->
           <div v-if="resultReady && !isLoading" class="space-y-6">
-            <!-- Card 1: Main Answer -->
             <div
-              class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-2xl shadow-xl shadow-slate-200/40 dark:shadow-black/25 overflow-hidden"
+              class="bg-white border border-slate-200 rounded-2xl shadow-xl shadow-slate-200/40 overflow-hidden"
             >
               <div
                 class="px-6 py-4 bg-primary text-white font-bold text-sm tracking-wide uppercase flex items-center justify-between"
@@ -563,7 +384,6 @@ onUnmounted(() => {
                   Valor Resultante
                 </div>
 
-                <!-- Main Result Rendering (KaTeX) -->
                 <div class="py-4 overflow-x-auto min-h-[70px] flex items-center justify-center">
                   <div
                     v-html="renderMath(finalResultLatex, true)"
@@ -571,7 +391,6 @@ onUnmounted(() => {
                   ></div>
                 </div>
 
-                <!-- Decimal format badge (for numerical methods) -->
                 <div
                   v-if="finalNumericalValue !== null"
                   class="inline-flex items-center space-x-2 bg-slate-100 px-3.5 py-1.5 rounded-xl"
@@ -584,7 +403,6 @@ onUnmounted(() => {
               </div>
             </div>
 
-            <!-- Card 2: Graphical Visualization (ONLY rendered for Numerical / Area Under Curve) -->
             <div
               v-if="calcMode === 'numerical'"
               class="bg-white border border-slate-200 rounded-2xl shadow-xl shadow-slate-200/40 p-6 space-y-4"
@@ -601,7 +419,6 @@ onUnmounted(() => {
                 >
               </div>
 
-              <!-- Chart mounting container -->
               <div
                 ref="chartRef"
                 class="w-full h-72 sm:h-80 md:h-96 rounded-xl overflow-hidden bg-slate-50/50"
@@ -613,18 +430,15 @@ onUnmounted(() => {
               </div>
             </div>
 
-            <!-- Card 3: Step-by-Step Explanation Accordion -->
             <div
               class="bg-white border border-slate-200 rounded-2xl shadow-xl shadow-slate-200/40 p-6 space-y-4"
             >
               <h3
                 class="font-extrabold text-sm text-slate-800 uppercase tracking-wider flex items-center space-x-2 border-b border-slate-100 pb-3"
               >
-                <span>👣</span>
                 <span>Resolución Paso a Paso</span>
               </h3>
 
-              <!-- Steps Accordion List -->
               <div class="space-y-3">
                 <div
                   v-for="(step, index) in resolutionSteps"
