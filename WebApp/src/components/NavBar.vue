@@ -32,7 +32,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <header class="sticky top-0 z-30 w-full backdrop-blur-md bg-white/70 border-b border-primary">
+  <header class="sticky top-0 z-30 w-full backdrop-blur-sm bg-white/50 border-b border-primary">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
       <!-- Logo -->
       <div class="flex items-center space-x-2">

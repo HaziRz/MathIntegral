@@ -1,0 +1,101 @@
+[
+  {
+    "id": "f0",
+    "name": "Integral de una Constante",
+    "category": "Propiedades Básicas",
+    "latex": "\\int k \\, dx = kx + C",
+    "sampleExpression": "5",
+    "calcMode": "analytical",
+    "explanation": "La integral de una constante es simplemente la constante multiplicada por la variable de integración, más la constante de integración C."
+  },
+  {
+    "id": "f1",
+    "name": "Regla de la Potencia",
+    "category": "Integrales Algebraicas",
+    "latex": "\\int x^n \\, dx = \\frac{x^{n+1}}{n+1} + C \\quad (si n \\neq -1)",
+    "sampleExpression": "x^2",
+    "calcMode": "analytical",
+    "explanation": "Suma uno al exponente y divide la variable por el exponente resultante."
+  },
+  {
+    "id": "f2",
+    "name": "Integral del Logaritmo Natural",
+    "category": "Integrales Algebraicas",
+    "latex": "\\int \\frac{1}{x} \\, dx = \\ln|x| + C",
+    "sampleExpression": "1/x",
+    "calcMode": "analytical",
+    "explanation": "El caso especial de la potencia n = -1. Produce un logaritmo natural absoluto como antiderivada."
+  },
+  {
+    "id": "f3",
+    "name": "Constante a la Potencia X",
+    "category": "Integrales Exponenciales",
+    "latex": "\\int a^x \\, dx = \\frac{a^x}{\\ln(a)} + C",
+    "sampleExpression": "2^x",
+    "calcMode": "analytical",
+    "explanation": "La integral de una constante elevada a la potencia x es igual a la constante elevada a la potencia x dividida por el logaritmo natural de la constante, más la constante de integración C."
+  },
+  {
+    "id": "f4",
+    "name": "Exponencial Natural",
+    "category": "Integrales Exponenciales",
+    "latex": "\\int e^x \\, dx = e^x + C",
+    "sampleExpression": "exp(x)",
+    "calcMode": "analytical",
+    "explanation": "La función exponencial de base e es su propia derivada, simplificando su cálculo."
+  },
+  {
+    "id": "f5",
+    "name": "Integral de Seno",
+    "category": "Trigonométricas",
+    "latex": "\\int \\sin(x) \\, dx = -\\cos(x) + C",
+    "sampleExpression": "sin(x)",
+    "calcMode": "analytical",
+    "explanation": "La integral de la función seno resulta en el coseno negativo debido a las relaciones trigonométricas."
+  },
+  {
+    "id": "f6",
+    "name": "Integral de Coseno",
+    "category": "Trigonométricas",
+    "latex": "\\int \\cos(x) \\, dx = \\sin(x) + C",
+    "sampleExpression": "cos(x)",
+    "calcMode": "analytical",
+    "explanation": "La integral de la función coseno resulta directamente en la función seno."
+  },
+  {
+    "id": "f7",
+    "name": "Integral de Tangente",
+    "category": "Trigonométricas",
+    "latex": "\\int \\tan(x) \\, dx = -\\ln[\\cos(x)] + C = \\ln[\\sec(x)] + C",
+    "sampleExpression": "tan(x)",
+    "calcMode": "analytical",
+    "explanation": "La integral de la función tangente resulta en el logaritmo natural del coseno negativo o el logaritmo natural de la secante positiva."
+  },
+  {
+    "id": "f8",
+    "name": "Integral de Cotangente",
+    "category": "Trigonométricas",
+    "latex": "\\int \\cot(x) \\, dx = \\ln[\\sin(x)] + C",
+    "sampleExpression": "cot(x)",
+    "calcMode": "analytical",
+    "explanation": "La integral de la función cotangente resulta en el logaritmo natural del seno."
+  },
+  {
+    "id": "f9",
+    "name": "Integral de Secante",
+    "category": "Trigonométricas",
+    "latex": "\\int \\sec(x) \\, dx = \\ln[\\sec(x) + \\tan(x)] + C",
+    "sampleExpression": "sec(x)",
+    "calcMode": "analytical",
+    "explanation": "La integral de la función secante resulta en el logaritmo natural de la secante más la tangente."
+  },
+  {
+    "id": "f10",
+    "name": "Integral de Cosecante",
+    "category": "Trigonométricas",
+    "latex": "\\int \\csc(x) \\, dx = \\ln[\\csc(x) - \\cot(x)] + C",
+    "sampleExpression": "csc(x)",
+    "calcMode": "analytical",
+    "explanation": "La integral de la función cosecante resulta en el logaritmo natural de la cosecante menos la cotangente."
+  }
+]
