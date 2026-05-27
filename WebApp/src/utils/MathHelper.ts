@@ -93,3 +93,165 @@ export function toLatex(expr: string): string {
 
   return latex
 }
+
+export interface IntervalShape {
+  x: number[]
+  y: number[]
+  type: 'rect' | 'trapezoid' | 'simpson'
+}
+
+export interface IntegrationResult {
+  value: number
+  intervals: IntervalShape[]
+}
+
+export function calculateNumericalIntegration(
+  expr: string,
+  a: number,
+  b: number,
+  n: number,
+  method: 'riemann_left' | 'riemann_right' | 'riemann_midpoint' | 'trapezoidal' | 'simpson',
+): IntegrationResult {
+  const dx = (b - a) / n
+  let sum = 0
+  const shapes: IntervalShape[] = []
+
+  // Make sure n is valid
+  if (n <= 0) return { value: 0, intervals: [] }
+
+  if (method === 'riemann_left') {
+    for (let i = 0; i < n; i++) {
+      const xi = a + i * dx
+      const xNext = xi + dx
+      const height = safeEval(expr, xi)
+      sum += height
+
+      shapes.push({
+        x: [xi, xi, xNext, xNext, xi],
+        y: [0, height, height, 0, 0],
+        type: 'rect',
+      })
+    }
+    return { value: sum * dx, intervals: shapes }
+  } else if (method === 'riemann_right') {
+    for (let i = 0; i < n; i++) {
+      const xi = a + i * dx
+      const xNext = xi + dx
+      const height = safeEval(expr, xNext)
+      sum += height
+
+      shapes.push({
+        x: [xi, xi, xNext, xNext, xi],
+        y: [0, height, height, 0, 0],
+        type: 'rect',
+      })
+    }
+    return { value: sum * dx, intervals: shapes }
+  } else if (method === 'riemann_midpoint') {
+    for (let i = 0; i < n; i++) {
+      const xi = a + i * dx
+      const xNext = xi + dx
+      const mid = xi + dx / 2
+      const height = safeEval(expr, mid)
+      sum += height
+
+      shapes.push({
+        x: [xi, xi, xNext, xNext, xi],
+        y: [0, height, height, 0, 0],
+        type: 'rect',
+      })
+    }
+    return { value: sum * dx, intervals: shapes }
+  } else if (method === 'trapezoidal') {
+    // T = dx/2 * (f(a) + f(b) + 2 * sum(f(xi)))
+    const fa = safeEval(expr, a)
+    const fb = safeEval(expr, b)
+    sum = (fa + fb) / 2
+
+    for (let i = 1; i < n; i++) {
+      const xi = a + i * dx
+      sum += safeEval(expr, xi)
+    }
+
+    // Build trapezoid shapes for visual display
+    for (let i = 0; i < n; i++) {
+      const xi = a + i * dx
+      const xNext = xi + dx
+      const yi = safeEval(expr, xi)
+      const yNext = safeEval(expr, xNext)
+
+      shapes.push({
+        x: [xi, xi, xNext, xNext, xi],
+        y: [0, yi, yNext, 0, 0],
+        type: 'trapezoid',
+      })
+    }
+    return { value: sum * dx, intervals: shapes }
+  } else if (method === 'simpson') {
+    // Simpson's rule requires an even number of intervals.
+    // If n is odd, increment by 1
+    const adjustedN = n % 2 === 0 ? n : n + 1
+    const adjDx = (b - a) / adjustedN
+
+    const fa = safeEval(expr, a)
+    const fb = safeEval(expr, b)
+    let simpsonSum = fa + fb
+
+    for (let i = 1; i < adjustedN; i++) {
+      const xi = a + i * adjDx
+      const coefficient = i % 2 === 0 ? 2 : 4
+      simpsonSum += coefficient * safeEval(expr, xi)
+    }
+
+    const value = (simpsonSum * adjDx) / 3
+
+    // For visualization of Simpson's rule, we approximate the curved shapes.
+    // We can draw a quadratic interpolation for each pair of intervals, or just draw
+    // trapezoids with points sampled at multiple sub-steps to look like curves.
+    for (let i = 0; i < adjustedN; i += 2) {
+      const x0 = a + i * adjDx
+      const x1 = x0 + adjDx
+      const x2 = x0 + 2 * adjDx
+
+      const y0 = safeEval(expr, x0)
+      const y1 = safeEval(expr, x1)
+      const y2 = safeEval(expr, x2)
+
+      // Quadratic interpolation: P(x) = A*x^2 + B*x + C
+      // We can sample multiple intermediate points between x0 and x2 to plot the curve
+      const xSample: number[] = [x0]
+      const ySample: number[] = [0] // start at x-axis
+
+      // Sample 10 points to draw the curved top of the Simpson interval
+      const steps = 10
+      const stepSize = (2 * adjDx) / steps
+      for (let s = 0; s <= steps; s++) {
+        const xVal = x0 + s * stepSize
+        // Lagrange Polynomial interpolation for the quadratic curve:
+        const term0 = (y0 * ((xVal - x1) * (xVal - x2))) / ((x0 - x1) * (x0 - x2))
+        const term1 = (y1 * ((xVal - x0) * (xVal - x2))) / ((x1 - x0) * (x1 - x2))
+        const term2 = (y2 * ((xVal - x0) * (xVal - x1))) / ((x2 - x0) * (x2 - x1))
+        const yVal = term0 + term1 + term2
+
+        xSample.push(xVal)
+        ySample.push(yVal)
+      }
+
+      xSample.push(x2)
+      ySample.push(0) // end at x-axis
+
+      xSample.push(x0)
+      ySample.push(0) // close shape
+
+      shapes.push({
+        x: xSample,
+        y: ySample,
+        type: 'simpson',
+      })
+    }
+
+    return { value, intervals: shapes }
+  }
+
+  return { value: 0, intervals: [] }
+}

@@ -17,6 +17,7 @@
   "dependencies": {
     "@tailwindcss/vite": "^4.3.0",
     "katex": "^0.17.0",
+    "plotly.js": "^3.5.1",
     "tailwindcss": "^4.3.0",
     "vue": "^3.5.32",
     "vue-router": "^5.0.4"
@@ -24,6 +25,7 @@
   "devDependencies": {
     "@tsconfig/node24": "^24.0.4",
     "@types/node": "^24.12.2",
+    "@types/plotly.js": "^3.0.10",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/eslint-config-typescript": "^14.7.0",
     "@vue/tsconfig": "^0.9.1",
