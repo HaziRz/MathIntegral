@@ -1,6 +1,14 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { renderMath, toLatex, solveIntegral } from '@/utils/MathHelper'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import {
+  renderMath,
+  toLatex,
+  solveIntegral,
+  solveNumericalIntegral,
+  safeEval,
+  calculateNumericalIntegration,
+} from '@/utils/MathHelper'
+import Plotly from 'plotly.js'
 
 interface Step {
   title: string
@@ -73,7 +81,199 @@ const livePreviewLatex = computed(() => {
   }
 })
 
-/* Resize handler
+const handleSolver = async () => {
+  if (!expression.value.trim()) {
+    errorMessage.value = 'Por favor, ingresa una expresión válida.'
+    return
+  }
+  if (
+    calcMode.value === 'numerical' &&
+    (lowerBound.value === null || upperBound.value === null || intervals.value <= 0)
+  ) {
+    errorMessage.value = 'Por favor, ingresa límites y número de intervalos válidos.'
+    return
+  }
+
+  isLoading.value = true
+  errorMessage.value = ''
+  resultReady.value = false
+  resolutionSteps.value = []
+
+  if (calcMode.value === 'numerical') {
+    const result = await solveNumericalIntegral(
+      expression.value,
+      lowerBound.value,
+      upperBound.value,
+      intervals.value,
+      numericalMethod.value,
+    )
+
+    finalNumericalValue.value = result.value
+    resolutionSteps.value = result.steps
+    finalResultLatex.value = result.latex
+    resultReady.value = true
+  }
+}
+
+const drawPlotlyChart = () => {
+  if (!chartRef.value || calcMode.value !== 'numerical') return
+
+  const a = lowerBound.value
+  const b = upperBound.value
+  const expr = expression.value
+
+  // 1. Generate smooth curve points for f(x)
+  const curveX: number[] = []
+  const curveY: number[] = []
+
+  const range = b - a
+  const plotMin = a - Math.max(1, range * 0.2)
+  const plotMax = b + Math.max(1, range * 0.2)
+  const totalPoints = 300
+  const stepSize = (plotMax - plotMin) / totalPoints
+
+  for (let i = 0; i <= totalPoints; i++) {
+    const px = plotMin + i * stepSize
+    const py = safeEval(expr, px)
+    curveX.push(px)
+    curveY.push(py)
+  }
+
+  // 2. Build the traces
+  const traces: any[] = []
+
+  // Main function line
+  traces.push({
+    x: curveX,
+    y: curveY,
+    name: 'f(x)',
+    type: 'scatter',
+    mode: 'lines',
+    line: {
+      color: '#3b82f6',
+      width: 3,
+    },
+  })
+
+  // Base area under the curve (continuous)
+  const areaX: number[] = []
+  const areaY: number[] = []
+  const areaPoints = 150
+  const areaStep = range / areaPoints
+  for (let i = 0; i <= areaPoints; i++) {
+    const ax = a + i * areaStep
+    areaX.push(ax)
+    areaY.push(safeEval(expr, ax))
+  }
+
+  traces.push({
+    x: [a, ...areaX, b],
+    y: [0, ...areaY, 0],
+    fill: 'toself',
+    fillcolor: 'rgba(59, 130, 246, 0.1)',
+    line: { color: 'transparent' },
+    name: 'Área Teórica',
+    hoverinfo: 'skip',
+  })
+
+  // 3. Subdivision shapes (Riemann / Trapezoids / Simpson segments)
+  const calcRes = calculateNumericalIntegration(expr, a, b, intervals.value, numericalMethod.value)
+  const shapes = calcRes.intervals
+  if (shapes.length > 0) {
+    const shapesX: (number | null)[] = []
+    const shapesY: (number | null)[] = []
+
+    shapes.forEach((shape) => {
+      shapesX.push(...shape.x, null)
+      shapesY.push(...shape.y, null)
+    })
+
+    traces.push({
+      x: shapesX,
+      y: shapesY,
+      fill: 'toself',
+      fillcolor: 'rgba(255, 187, 0, 0.25)',
+      line: {
+        color: '#ffbb00',
+        width: 1.5,
+      },
+      name: 'Intervalos (' + numericalMethod.value.replace('_', ' ') + ')',
+      type: 'scatter',
+      mode: 'lines',
+    })
+  }
+
+  // 4. Vertical limits a and b
+  const maxVal = Math.max(0, ...curveY, ...shapes.flatMap((s) => s.y))
+  const minVal = Math.min(0, ...curveY, ...shapes.flatMap((s) => s.y))
+
+  traces.push({
+    x: [a, a],
+    y: [minVal, maxVal],
+    mode: 'lines',
+    line: {
+      color: '#ef4444', // Red
+      width: 1.5,
+      dash: 'dash',
+    },
+    name: `x = a (${a})`,
+    showlegend: false,
+  })
+
+  traces.push({
+    x: [b, b],
+    y: [minVal, maxVal],
+    mode: 'lines',
+    line: {
+      color: '#ef4444',
+      width: 1.5,
+      dash: 'dash',
+    },
+    name: `x = b (${b})`,
+    showlegend: false,
+  })
+
+  // 5. Layout config
+  const layout = {
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    autosize: true,
+    font: {
+      color: '#cbd5e1',
+      family: 'Inter, system-ui, sans-serif',
+    },
+    xaxis: {
+      gridcolor: 'rgba(51, 65, 85, 0.5)',
+      zerolinecolor: '#475569',
+      title: 'Eje X',
+      tickmode: 'auto',
+    },
+    yaxis: {
+      gridcolor: 'rgba(51, 65, 85, 0.5)',
+      zerolinecolor: '#475569',
+      title: 'f(x)',
+      tickmode: 'auto',
+    },
+    margin: { t: 20, r: 15, b: 35, l: 45 },
+    hovermode: 'closest',
+    showlegend: true,
+    legend: {
+      orientation: 'h',
+      x: 0,
+      y: -0.25,
+      font: { size: 11 },
+    },
+  }
+
+  const config = {
+    responsive: true,
+    displayModeBar: false,
+  }
+
+  Plotly.newPlot(chartRef.value, traces, layout as any, config)
+}
+
+// Resize handler
 const handleResize = () => {
   if (calcMode.value === 'numerical' && resultReady && chartRef.value) {
     Plotly.Plots.resize(chartRef.value)
@@ -92,7 +292,15 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
-})*/
+})
+
+watch([lowerBound, upperBound, intervals, numericalMethod, () => resultReady.value], () => {
+  if (calcMode.value === 'numerical' && resultReady.value) {
+    nextTick(() => {
+      drawPlotlyChart()
+    })
+  }
+})
 </script>
 
 <template>
@@ -336,7 +544,7 @@ onUnmounted(() => {
 
             <div
               v-if="errorMessage"
-              class="p-4 rounded-xl border border-red-200/50 bg-red-50/50 dark:bg-red-950/20 dark:border-red-900/40 text-red-700 dark:text-red-400 text-xs font-semibold leading-relaxed"
+              class="p-4 rounded-xl border border-red-200/50 bg-red-50/50 text-red-700 text-xs font-semibold leading-relaxed"
             >
               <div class="flex items-start space-x-2">
                 <span>{{ errorMessage }}</span>
@@ -411,12 +619,8 @@ onUnmounted(() => {
                 <h3
                   class="font-extrabold text-sm text-slate-800 uppercase tracking-wider flex items-center space-x-2"
                 >
-                  <span>📊</span>
                   <span>Visualización del Área Bajo la Curva</span>
                 </h3>
-                <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-mono"
-                  >Plotly.js</span
-                >
               </div>
 
               <div

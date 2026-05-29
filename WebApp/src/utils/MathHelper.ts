@@ -82,18 +82,10 @@ export function toLatex(expr: string): string {
 
   let latex = expr.trim()
 
-  // Replace standard multiplication sign
   latex = latex.replace(/\*/g, ' \\cdot ')
-
-  // Format division a/b into \frac{a}{b} for simple patterns
-  // Pattern: alphanumeric_or_paren / alphanumeric_or_paren
-  // We can do a simple replacement for basic divisions:
   latex = latex.replace(/([a-zA-Z0-9_.\(\)]+)\/([a-zA-Z0-9_.\(\)]+)/g, '\\frac{$1}{$2}')
-
-  // Format power x^y to {x}^{y}
   latex = latex.replace(/([a-zA-Z0-9_.\(\)]+)\^([a-zA-Z0-9_.\(\)]+)/g, '{$1}^{$2}')
 
-  // Replace standard functions with LaTeX equivalent
   latex = latex.replace(/\bsin\b/g, '\\sin')
   latex = latex.replace(/\bcos\b/g, '\\cos')
   latex = latex.replace(/\btan\b/g, '\\tan')
@@ -102,7 +94,6 @@ export function toLatex(expr: string): string {
   latex = latex.replace(/\bsqrt\b/g, '\\sqrt')
   latex = latex.replace(/\bpi\b/g, '\\pi')
 
-  // Turn parentheses in \sqrt(...) into braces \sqrt{...}
   latex = latex.replace(/\\sqrt\((.*?)\)/g, '\\sqrt{$1}')
 
   return latex
@@ -112,6 +103,13 @@ export interface IntervalShape {
   x: number[]
   y: number[]
   type: 'rect' | 'trapezoid' | 'simpson'
+}
+
+export interface NumericalIntegrationResult {
+  value: number
+  latex: string
+  steps: Step[]
+  shapes: IntervalShape[]
 }
 
 export interface IntegrationResult {
@@ -124,13 +122,12 @@ export function calculateNumericalIntegration(
   a: number,
   b: number,
   n: number,
-  method: 'riemann_left' | 'riemann_right' | 'riemann_midpoint' | 'trapezoidal' | 'simpson',
+  method: NumericalMethod,
 ): IntegrationResult {
   const dx = (b - a) / n
   let sum = 0
   const shapes: IntervalShape[] = []
 
-  // Make sure n is valid
   if (n <= 0) return { value: 0, intervals: [] }
 
   if (method === 'riemann_left') {
@@ -268,6 +265,47 @@ export function calculateNumericalIntegration(
   }
 
   return { value: 0, intervals: [] }
+}
+
+export async function solveNumericalIntegral(
+  expression: string,
+  lowerBound: number,
+  upperBound: number,
+  intervals: number,
+  numericalMethod: NumericalMethod,
+): Promise<NumericalIntegrationResult> {
+  await new Promise((resolve) => setTimeout(resolve, 750))
+  const calcResult = calculateNumericalIntegration(
+    expression,
+    lowerBound,
+    upperBound,
+    intervals,
+    numericalMethod,
+  )
+
+  const finalNumericalValue = calcResult.value
+  const finalResultLatex = `\\approx ${calcResult.value.toFixed(6)}`
+
+  const dx = (upperBound - lowerBound) / intervals
+  const resolutionSteps: Step[] = [
+    {
+      title: '1. Configuración de Intervalos',
+      explanation: `El intervalo de integración es [a, b] = [${lowerBound}, ${upperBound}]. Con n = ${intervals} subdivisiones, obtenemos un ancho de paso Δx:`,
+      latex: `\\Delta x = \\frac{b - a}{n} = \\frac{${upperBound} - ${lowerBound}}{${intervals}} = ${dx.toFixed(6)}`,
+    },
+    {
+      title: '2. Evaluación de Sumatoria',
+      explanation: `Aplicando la aproximación mediante el método seleccionado (${numericalMethod.replace('_', ' ')}):`,
+      latex: `Area \\approx \\sum \\text{Evaluaciones} \\cdot \\Delta x = ${calcResult.value.toFixed(6)}`,
+    },
+  ]
+
+  return {
+    value: finalNumericalValue,
+    latex: finalResultLatex,
+    steps: resolutionSteps,
+    shapes: calcResult.intervals,
+  }
 }
 
 // --- Solver Action ---
