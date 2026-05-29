@@ -1,6 +1,15 @@
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+builder.Services.AddScoped<IIntegralService, IntegralService>();
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("Vue", policy =>
+        policy.WithOrigins("http://localhost:5173").AllowAnyHeader().AllowAnyMethod());
+});
+
+builder.Services.AddControllers();
 
 var app = builder.Build();
 
@@ -25,6 +34,10 @@ app.MapGet("/weatherforecast", () =>
         .ToArray();
     return forecast;
 });
+
+app.UseCors("Vue");
+
+app.MapControllers();
 
 app.Run();
 
