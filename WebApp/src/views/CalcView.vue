@@ -3,12 +3,12 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import {
   renderMath,
   toLatex,
-  solveIntegral,
   solveNumericalIntegral,
   safeEval,
   calculateNumericalIntegration,
+  type NumericalMethod,
 } from '@/utils/MathHelper'
-import Plotly from 'plotly.js'
+import Plotly from 'plotly.js-dist-min'
 
 interface Step {
   title: string
@@ -22,10 +22,7 @@ const calcMode = ref<'analytical' | 'numerical'>('analytical')
 const lowerBound = ref<number>(0)
 const upperBound = ref<number>(2)
 const intervals = ref<number>(10)
-const numericalMethod = ref<
-  'riemann_left' | 'riemann_right' | 'riemann_midpoint' | 'trapezoidal' | 'simpson'
->('trapezoidal')
-const useMockMode = ref(false)
+const numericalMethod = ref<NumericalMethod>('trapezoidal')
 
 const isLoading = ref(false)
 const errorMessage = ref('')
@@ -112,6 +109,8 @@ const handleSolver = async () => {
     resolutionSteps.value = result.steps
     finalResultLatex.value = result.latex
     resultReady.value = true
+    drawPlotlyChart()
+    isLoading.value = false
   }
 }
 
@@ -324,14 +323,6 @@ watch([lowerBound, upperBound, intervals, numericalMethod, () => resultReady.val
             class="px-6 py-4 bg-linear-to-r border-b border-slate-200 flex items-center justify-between"
           >
             <span class="font-bold text-slate-700 text-md tracking-wide uppercase">Parámetros</span>
-
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" v-model="useMockMode" class="sr-only peer" />
-              <div
-                class="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:border-white peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"
-              ></div>
-              <span class="ml-2 text-xs font-semibold text-slate-500">Local</span>
-            </label>
           </div>
 
           <div class="p-6 space-y-6">
@@ -499,23 +490,7 @@ watch([lowerBound, upperBound, intervals, numericalMethod, () => resultReady.val
 
             <button
               type="button"
-              @click="
-                solveIntegral(
-                  expression,
-                  calcMode,
-                  isLoading,
-                  errorMessage,
-                  resultReady,
-                  finalNumericalValue,
-                  finalResultLatex,
-                  resolutionSteps,
-                  lowerBound,
-                  upperBound,
-                  intervals,
-                  numericalMethod,
-                  useMockMode,
-                )
-              "
+              @click="handleSolver()"
               :disabled="isLoading"
               class="w-full py-3.5 px-4 rounded-xl text-white font-extrabold cursor-pointer tracking-wide bg-primary hover:bg-primary/80 disabled:opacity-50 transition-all duration-300 shadow-md hover:shadow-lg shadow-primary/20 flex items-center justify-center space-x-2 active:scale-[0.98]"
             >
