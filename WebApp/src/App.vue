@@ -1,25 +1,40 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import FormulasView from './views/FormulasView.vue'
 import CalcView from './views/CalcView.vue'
+import HistoryView from './views/HistoryView.vue'
 import { renderMath } from '@/utils/MathHelper'
+import { syncHistory, type HistoryItem } from '@/utils/LocalHistoryUtil'
 
 const activeTab = ref<'solver' | 'formulas' | 'history'>('solver')
 
-interface HistoryItem {
-  id: string
-  expression: string
-  calcMode: 'analytical' | 'numerical'
-  lowerBound?: number
-  upperBound?: number
-  intervals?: number
-  numericalMethod?: string
-  timestamp: string
-  result: string
-  numericalResult?: number | null
-}
+const calcViewRef = ref<any>(null)
 
 const calculationHistory = ref<HistoryItem[]>([])
+
+function updateHistory() {
+  const saved = localStorage.getItem('math_integral_history')
+  if (saved) {
+    try {
+      calculationHistory.value = JSON.parse(saved)
+      syncHistory(calculationHistory.value)
+    } catch (e) {
+      localStorage.removeItem('math_integral_history')
+      calculationHistory.value = []
+    }
+  } else {
+    calculationHistory.value = []
+  }
+}
+
+const handleLoadHistoryItem = (item: HistoryItem) => {
+  activeTab.value = 'solver'
+  calcViewRef.value?.loadItemFromHistory(item)
+}
+
+onMounted(() => {
+  updateHistory()
+})
 </script>
 
 <template>
@@ -67,7 +82,7 @@ const calculationHistory = ref<HistoryItem[]>([])
         <button
           @click="activeTab = 'history'"
           :class="[
-            'px-3.5 py-2 rounded-xl text-sm font-semibold transition-all duration-200 flex items-center space-x-1.5 cursor-pointer',
+            'px-3.5 py-2 rounded-xl text-sm font-semibold transition-all duration-200 flex items-center space-x-1.5 cursor-pointer peer',
             activeTab === 'history'
               ? 'bg-primary/10 text-primary'
               : 'text-slate-600 hover:bg-slate-100',
@@ -76,7 +91,11 @@ const calculationHistory = ref<HistoryItem[]>([])
           <span>Historial</span>
           <span
             v-if="calculationHistory.length > 0"
-            class="ml-1 px-1.5 py-0.5 text-[10px] bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-full font-bold"
+            class="ml-1 px-1.5 py-0.5 text-[10px] rounded-full font-bold transition-all duration-200"
+            :class="{
+              'bg-slate-200 text-slate-700': activeTab === 'history',
+              'bg-primary/10 text-primary': activeTab !== 'history',
+            }"
           >
             {{ calculationHistory.length }}
           </span>
@@ -84,8 +103,14 @@ const calculationHistory = ref<HistoryItem[]>([])
       </nav>
     </div>
   </header>
-  <CalcView v-show="activeTab === 'solver'" />
+  <CalcView v-show="activeTab === 'solver'" @updt="updateHistory()" ref="calcViewRef" />
   <FormulasView v-show="activeTab === 'formulas'" />
+  <HistoryView
+    v-show="activeTab === 'history'"
+    :history="calculationHistory"
+    @updt="updateHistory()"
+    @load="handleLoadHistoryItem"
+  />
 </template>
 
 <style scoped></style>

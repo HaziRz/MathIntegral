@@ -33,8 +33,8 @@ onMounted(loadFormulas)
 </script>
 
 <template>
-  <main>
-    <div class="space-y-8 mt-16 mb-16">
+  <main class="mt-16 mb-16">
+    <div class="space-y-8">
       <div class="text-center max-w-2xl mx-auto">
         <h2 class="text-3xl font-extrabold tracking-tight text-slate-900">
           Formulario y Biblioteca de Integrales
@@ -45,7 +45,6 @@ onMounted(loadFormulas)
         </p>
       </div>
 
-      <!-- Formula Cards Grid -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mx-32">
         <div
           v-for="formula in formulasLibrary"

@@ -9,6 +9,8 @@ import {
   type NumericalMethod,
 } from '@/utils/MathHelper'
 import Plotly from 'plotly.js-dist-min'
+import axios from 'axios'
+import { saveToHistory, type HistoryItem } from '@/utils/LocalHistoryUtil'
 
 interface Step {
   title: string
@@ -16,8 +18,12 @@ interface Step {
   latex: string
 }
 
+const emit = defineEmits<{
+  (e: 'updt'): void
+}>()
+
 // --- Props & Models ---
-const expression = ref('x^2')
+const expression = ref('')
 const calcMode = ref<'analytical' | 'numerical'>('analytical')
 const lowerBound = ref<number>(0)
 const upperBound = ref<number>(2)
@@ -34,6 +40,21 @@ const resolutionSteps = ref<Step[]>([])
 const inputRef = ref<HTMLInputElement | null>(null)
 const chartRef = ref<HTMLDivElement | null>(null)
 const activeStepIndex = ref<number | null>(0)
+
+const resetState = () => {
+  expression.value = ''
+  lowerBound.value = 0
+  upperBound.value = 2
+  intervals.value = 10
+  numericalMethod.value = 'trapezoidal'
+  isLoading.value = false
+  errorMessage.value = ''
+  resultReady.value = false
+  finalResultLatex.value = ''
+  finalNumericalValue.value = null
+  resolutionSteps.value = []
+  activeStepIndex.value = null
+}
 
 // --- Math Keypad Input Helper ---
 const insertSymbol = (symbol: string) => {
@@ -111,6 +132,41 @@ const handleSolver = async () => {
     resultReady.value = true
     drawPlotlyChart()
     isLoading.value = false
+  }
+
+  if (calcMode.value === 'analytical') {
+    try {
+      const response = await axios.post('https://localhost:7060/api/integral/solve', {
+        expression: expression.value,
+        //variable: 'x',
+      })
+
+      const result = response.data
+      finalResultLatex.value = result.resultLatex
+      resolutionSteps.value = result.steps
+      resultReady.value = true
+    } catch (error: any) {
+      errorMessage.value =
+        error.response?.data?.error ||
+        error.message ||
+        'No se pudo conectar con el servidor. Verifica tu conexión.'
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  if (resultReady.value) {
+    saveToHistory(
+      expression.value,
+      calcMode.value,
+      lowerBound.value,
+      upperBound.value,
+      intervals.value,
+      numericalMethod.value,
+      finalResultLatex.value,
+      finalNumericalValue.value,
+    )
+    emit('updt')
   }
 }
 
@@ -300,6 +356,24 @@ watch([lowerBound, upperBound, intervals, numericalMethod, () => resultReady.val
     })
   }
 })
+
+const loadItemFromHistory = (item: HistoryItem) => {
+  calcMode.value = item.calcMode
+  expression.value = item.expression
+  if (item.calcMode === 'numerical') {
+    lowerBound.value = item.lowerBound ?? 0
+    upperBound.value = item.upperBound ?? 2
+    intervals.value = item.intervals ?? 10
+    numericalMethod.value = (item.numericalMethod as NumericalMethod) ?? 'trapezoidal'
+  }
+  nextTick(() => {
+    handleSolver()
+  })
+}
+
+defineExpose({
+  loadItemFromHistory,
+})
 </script>
 
 <template>
@@ -329,7 +403,12 @@ watch([lowerBound, upperBound, intervals, numericalMethod, () => resultReady.val
             <div class="bg-slate-100 p-1.5 rounded-xl flex space-x-1">
               <button
                 type="button"
-                @click="calcMode = 'analytical'"
+                @click="
+                  () => {
+                    calcMode = 'analytical'
+                    resetState()
+                  }
+                "
                 :class="[
                   'w-1/2 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all duration-300 cursor-pointer',
                   calcMode === 'analytical'
@@ -341,7 +420,12 @@ watch([lowerBound, upperBound, intervals, numericalMethod, () => resultReady.val
               </button>
               <button
                 type="button"
-                @click="calcMode = 'numerical'"
+                @click="
+                  () => {
+                    calcMode = 'numerical'
+                    resetState()
+                  }
+                "
                 :class="[
                   'w-1/2 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all duration-300 cursor-pointer',
                   calcMode === 'numerical'
@@ -361,7 +445,7 @@ watch([lowerBound, upperBound, intervals, numericalMethod, () => resultReady.val
                 Función a Integrar f(x)
               </label>
               <div class="relative">
-                <span class="absolute left-4 top-3.5 font-serif italic text-slate-400 text-lg"
+                <span class="absolute left-4 top-3 font-serif italic text-slate-500 text-lg"
                   >f(x) =</span
                 >
                 <input

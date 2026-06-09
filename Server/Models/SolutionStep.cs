@@ -6,10 +6,10 @@ public class SolutionStep
     public string Title { get; set; } = string.Empty;
 
     /// <summary>Explicación detallada del paso en formato LaTeX / texto.</summary>
-    public string Description { get; set; } = string.Empty;
+    public string Explanation { get; set; } = string.Empty;
 
     /// <summary>Expresión matemática resultante en LaTeX.</summary>
-    public string ExpressionLatex { get; set; } = string.Empty;
+    public string Latex { get; set; } = string.Empty;
 
     /// <summary>Nombre de la regla aplicada.</summary>
     public string RuleName { get; set; } = string.Empty;

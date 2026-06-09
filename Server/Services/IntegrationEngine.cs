@@ -393,9 +393,9 @@ public class IntegrationEngine
         _steps.Add(new SolutionStep
         {
             Number          = ++_stepNum,
-            Title           = title,
-            Description     = desc,
-            ExpressionLatex = latex,
+            Title           = _stepNum + ". " + title,
+            Explanation     = desc,
+            Latex = latex,
             RuleName        = rule,
         });
     }
